@@ -10,7 +10,7 @@ import (
 )
 
 var gone = map[byte]bool{
-	'a': true,
+	//'t': true,
 }
 
 var guessed = [5]byte{0, 0, 0, 0, 0}
@@ -109,7 +109,15 @@ func informationGained(word []byte) float64 {
 		if guessed[i] != 0 {
 			// we can't guess the word, but we can detect a position somewhere
 			// else
-			fraction = 1 / float64(3)
+			fraction = fraction * 1 / float64(3)
+		}
+		for j := range guessed {
+			if i != j && guessed[j] == letter {
+				// letter that was guessed elsewhere can still be in the word,
+				// but assign it a lower probability - more likely we are
+				// stepping on some other letter that can go here.
+				fraction = fraction * 1 / float64(3)
+			}
 		}
 		if repeats[letter] {
 			// We can still guess it exactly but we won't get more info about
@@ -215,10 +223,13 @@ func main() {
 	}
 	fmt.Println("")
 	sort.Strings(eligibleWords)
-	fmt.Println(len(eligibleWords), "eligible words:")
+	fmt.Printf("%d eligible words", len(eligibleWords))
 	if len(eligibleWords) < 150 {
+		fmt.Printf(":\n")
 		for i := range eligibleWords {
 			fmt.Println(eligibleWords[i])
 		}
+	} else {
+		fmt.Printf("\n")
 	}
 }
