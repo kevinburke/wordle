@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"sort"
 )
 
 var gone = map[byte]bool{
-	//'i': true,
+	// 'c': true,
 }
 
 var guessed = [5]byte{0, 0, 0, 0, 0}
@@ -142,7 +139,7 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 				otherPositionSum += frequencyV2[j][letter] * 1 / float64(mustGuess)
 			}
 		}
-		otherPositionSum = otherPositionSum / 3
+		otherPositionSum = otherPositionSum / 4
 		otherPositionInfo := float64(0)
 		if otherPositionSum > 0 {
 			otherPositionInfo = otherPositionSum * -1 * math.Log(otherPositionSum)
@@ -204,7 +201,8 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 	}
 	if eligibleWord {
 		// We gain a lot of information if we guess the word correctly!
-		rval += 1 / float64(mustGuess) * -1 * math.Log(1/float64(mustGuess))
+		wordGuessBonus := 1 / float64(wordsLeft) * -1 * math.Log(1/float64(wordsLeft))
+		rval += wordGuessBonus
 	}
 	if debug {
 		fmt.Printf("%s", string(word))
@@ -258,22 +256,17 @@ type score struct {
 }
 
 func main() {
-	wordsAll, err := os.ReadFile("/usr/share/dict/words")
-	if err != nil {
-		log.Fatal(err)
-	}
-	wordsSplit := bytes.Split(wordsAll, []byte{'\n'})
 	scores := make([]score, 0)
 	eligibleWords := make([]string, 0)
 	eligibleMap := make(map[string]bool, 0)
-	for _, word := range wordsSplit {
+	for _, word := range words {
 		if len(word) != 5 {
 			continue
 		}
-		sword := string(word)
-		if eligible(word) {
-			eligibleWords = append(eligibleWords, sword)
-			eligibleMap[sword] = true
+		bword := []byte(word)
+		if eligible(bword) {
+			eligibleWords = append(eligibleWords, word)
+			eligibleMap[word] = true
 		}
 	}
 	if len(eligibleWords) == 1 {
@@ -320,16 +313,13 @@ func main() {
 			frequencyV2[i][letter] = count / float64(len(eligibleWords))
 		}
 	}
-	for _, word := range wordsSplit {
-		if len(word) != 5 {
+	for _, word := range words {
+		if ineligible[word] {
 			continue
 		}
-		sword := string(word)
-		if ineligible[sword] {
-			continue
-		}
-		entropy := informationGained(word, eligibleMap[sword], len(eligibleMap), false)
-		scores = append(scores, score{word: sword, entropy: entropy})
+		bword := []byte(word)
+		entropy := informationGained(bword, eligibleMap[word], len(eligibleMap), false)
+		scores = append(scores, score{word: word, entropy: entropy})
 		sort.Slice(scores, func(i, j int) bool {
 			return scores[i].entropy > scores[j].entropy
 		})
