@@ -9,18 +9,40 @@ import (
 	"sort"
 )
 
-var gone = map[byte]bool{
-	//'t': true,
+var ineligible = map[string]bool{
+	// Words in /usr/share/dict/words that aren't accepted by Wordle.
+	"soary": true,
+	"barie": true,
+	"solay": true,
+	"seary": true,
+	"sairy": true,
+	"saily": true,
+	"sorty": true,
+	"tarie": true,
 }
 
-var guessed = [5]byte{0, 0, 0, 0, 0}
+var gone = map[byte]bool{
+	'c': true,
+	'e': true,
+	't': true,
+	'l': true,
+	'i': true,
+	'y': true,
+	'd': true,
+	'n': true,
+	's': true,
+	'u': true,
+	'p': true,
+}
+
+var guessed = [5]byte{0, 'a', 0, 'o', 'r'}
 
 // In the word but in the wrong position
 var inWord = [5]map[byte]bool{
+	{'r': true},
 	nil,
-	nil,
-	nil,
-	nil,
+	{'r': true},
+	{'r': true},
 	nil,
 }
 
@@ -70,6 +92,12 @@ var frequency = map[byte]float64{
 	'z': 0.0006,
 }
 
+// Combines:
+// the actual frequency at that letter based on the remaining words
+// At 1/4 value, the frequency of all remaining letters in any position
+// Letters we know are in the word but in different positions
+var frequencyV2 = [5]map[byte]float64{}
+
 func validWord(word []byte) bool {
 	if len(word) != 5 {
 		return false
@@ -89,11 +117,11 @@ func informationGained(word []byte) float64 {
 	sum := float64(0)
 	repeats := make(map[byte]bool)
 	for i, letter := range word {
-		if _, ok := frequency[letter]; !ok {
-			return 0
-		}
 		if gone[letter] {
 			continue
+		}
+		if val, ok := frequencyV2[i][letter]; !ok || val == 0 {
+			return 0
 		}
 		if guessed[i] != 0 && guessed[i] == letter {
 			// we gain 0 information from guessing a letter in a position we
@@ -107,14 +135,14 @@ func informationGained(word []byte) float64 {
 		}
 		fraction := float64(1)
 		if guessed[i] != 0 {
-			// we can't guess the word, but we can detect a position somewhere
-			// else
-			fraction = fraction * 1 / float64(3)
+			// we've already guessed the letter in this position, but if we
+			// guess a different letter, we can detect a position somewhere else
+			fraction = fraction * 1 / float64(4)
 		}
 		for j := range guessed {
 			if i != j && guessed[j] == letter {
-				// letter that was guessed elsewhere can still be in the word,
-				// but assign it a lower probability - more likely we are
+				// a letter that was guessed elsewhere can still be in the
+				// word, but assign it a lower probability - more likely we are
 				// stepping on some other letter that can go here.
 				fraction = fraction * 1 / float64(3)
 			}
@@ -125,7 +153,7 @@ func informationGained(word []byte) float64 {
 			fraction = fraction * 1 / float64(4)
 		}
 		repeats[letter] = true
-		freq, ok := frequency[letter]
+		freq, ok := frequencyV2[i][letter]
 		if !ok {
 			return 0
 		}
@@ -135,6 +163,9 @@ func informationGained(word []byte) float64 {
 }
 
 func eligible(word []byte) bool {
+	if ineligible[string(word)] {
+		return false
+	}
 	wordCopy := make(map[byte]bool, len(lettersInWord))
 	for i := range lettersInWord {
 		wordCopy[i] = true
@@ -173,16 +204,20 @@ func main() {
 		log.Fatal(err)
 	}
 	wordsSplit := bytes.Split(wordsAll, []byte{'\n'})
-	fmt.Println(len(wordsSplit))
 	scores := make([]score, 0)
 	eligibleWords := make([]string, 0)
 	for _, word := range wordsSplit {
 		if len(word) != 5 {
 			continue
 		}
+		sword := string(word)
 		if eligible(word) {
-			eligibleWords = append(eligibleWords, string(word))
+			eligibleWords = append(eligibleWords, sword)
 		}
+	}
+	if len(eligibleWords) == 1 {
+		fmt.Println("the word is:", eligibleWords[0])
+		return
 	}
 	// find letters which don't appear in any of the eligible words, and add
 	// them to the 'gone' list
@@ -205,12 +240,35 @@ func main() {
 		fmt.Println("adding", string(i), "to 'gone' list")
 		gone[i] = true
 	}
+	// Build frequency tables for each position from the remaining eligible
+	// words
+	frequencyV2 = [5]map[byte]float64{}
+	for _, word := range eligibleWords {
+		for i, letter := range []byte(word) {
+			if frequencyV2[i] == nil {
+				frequencyV2[i] = make(map[byte]float64)
+			}
+			if _, ok := frequencyV2[i][letter]; !ok {
+				frequencyV2[i][letter] = 0
+			}
+			frequencyV2[i][letter] += 1
+		}
+	}
+	for i := range frequencyV2 {
+		for letter, count := range frequencyV2[i] {
+			frequencyV2[i][letter] = count / float64(len(eligibleWords))
+		}
+	}
 	for _, word := range wordsSplit {
 		if len(word) != 5 {
 			continue
 		}
+		sword := string(word)
+		if ineligible[sword] {
+			continue
+		}
 		entropy := informationGained(word)
-		scores = append(scores, score{word: string(word), entropy: entropy})
+		scores = append(scores, score{word: sword, entropy: entropy})
 		sort.Slice(scores, func(i, j int) bool {
 			return scores[i].entropy > scores[j].entropy
 		})
