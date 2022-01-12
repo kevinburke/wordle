@@ -9,48 +9,29 @@ import (
 	"sort"
 )
 
-var ineligible = map[string]bool{
-	// Words in /usr/share/dict/words that aren't accepted by Wordle.
-	"soary": true,
-	"barie": true,
-	"solay": true,
-	"seary": true,
-	"sairy": true,
-	"saily": true,
-	"sorty": true,
-	"tarie": true,
-}
-
 var gone = map[byte]bool{
-	'c': true,
-	'e': true,
-	't': true,
-	'l': true,
-	'i': true,
-	'y': true,
-	'd': true,
-	'n': true,
-	's': true,
-	'u': true,
-	'p': true,
+	//'i': true,
 }
 
-var guessed = [5]byte{0, 'a', 0, 'o', 'r'}
+var guessed = [5]byte{0, 0, 0, 0, 0}
+var mustGuess int
 
 // In the word but in the wrong position
 var inWord = [5]map[byte]bool{
-	{'r': true},
 	nil,
-	{'r': true},
-	{'r': true},
+	nil,
+	nil,
+	nil,
 	nil,
 }
 
 var lettersInWord = map[byte]bool{}
 
 func init() {
+	mustGuess = 0
 	for i := range guessed {
 		if guessed[i] == 0 {
+			mustGuess++
 			continue
 		}
 		lettersInWord[guessed[i]] = true
@@ -58,6 +39,36 @@ func init() {
 	for i := range inWord {
 		for j := range inWord[i] {
 			lettersInWord[j] = true
+		}
+	}
+	for letter := range lettersInWord {
+		possiblePositions := [5]bool{}
+		count := 0
+		for j := range possiblePositions {
+			if guessed[j] == letter {
+				// we found where the letter is
+				count = 0
+				break
+			}
+			if guessed[j] != 0 {
+				// can't put here
+				continue
+			}
+			if inWord[j][letter] {
+				// can't put here because we got yellow at this spot
+				continue
+			}
+			possiblePositions[j] = true
+			count++
+		}
+		if count == 1 {
+			for j := range possiblePositions {
+				if possiblePositions[j] && guessed[j] == 0 {
+					fmt.Println("assigning", string(letter), "to only remaining position", j+1)
+					guessed[j] = letter
+					mustGuess--
+				}
+			}
 		}
 	}
 }
@@ -113,53 +124,101 @@ func validWord(word []byte) bool {
 	return true
 }
 
-func informationGained(word []byte) float64 {
-	sum := float64(0)
+func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool) float64 {
+	sum := [5]float64{}
 	repeats := make(map[byte]bool)
 	for i, letter := range word {
 		if gone[letter] {
 			continue
 		}
-		if val, ok := frequencyV2[i][letter]; !ok || val == 0 {
+		if _, ok := frequency[letter]; !ok {
+			// there are some words with capital letters
 			return 0
+		}
+		// However, we _can_ gain information about the other positions
+		otherPositionSum := float64(0)
+		for j := 0; j < 5; j++ {
+			if j != i && guessed[j] == 0 {
+				otherPositionSum += frequencyV2[j][letter] * 1 / float64(mustGuess)
+			}
+		}
+		otherPositionSum = otherPositionSum / 3
+		otherPositionInfo := float64(0)
+		if otherPositionSum > 0 {
+			otherPositionInfo = otherPositionSum * -1 * math.Log(otherPositionSum)
+			if eligibleWord {
+				//fmt.Println(string(word), "other position", otherPositionSum, otherPositionInfo)
+			}
 		}
 		if guessed[i] != 0 && guessed[i] == letter {
 			// we gain 0 information from guessing a letter in a position we
 			// already know
+			sum[i] = otherPositionInfo / 3
 			continue
 		}
 		if inWord[i][guessed[i]] {
 			// we've already guessed this letter in this position, we gain
 			// 0 from guessing it again
+			sum[i] = otherPositionInfo
+			continue
+		}
+		if val, ok := frequencyV2[i][letter]; !ok || val == 0 {
+			// we gain zero information at this position by guessing a letter
+			// that doesn't fit with any of the current words
+			sum[i] = otherPositionInfo
 			continue
 		}
 		fraction := float64(1)
 		if guessed[i] != 0 {
 			// we've already guessed the letter in this position, but if we
 			// guess a different letter, we can detect a position somewhere else
-			fraction = fraction * 1 / float64(4)
+			fraction = fraction * (float64(mustGuess) * 1.5) / float64(10)
 		}
 		for j := range guessed {
 			if i != j && guessed[j] == letter {
-				// a letter that was guessed elsewhere can still be in the
-				// word, but assign it a lower probability - more likely we are
-				// stepping on some other letter that can go here.
-				fraction = fraction * 1 / float64(3)
+				// a letter that was guessed elsewhere in the word can still be
+				// in a different position in the word, but assign it a lower
+				// probability - more likely we are stepping on some other
+				// letter that can go here.
+				fraction = fraction * 1 / float64(mustGuess)
 			}
 		}
 		if repeats[letter] {
 			// We can still guess it exactly but we won't get more info about
 			// whether this letter is somewhere else in the word.
-			fraction = fraction * 1 / float64(4)
+			//
+			// However the utility of repeats declines as there are fewer words
+			// left to guess
+			fraction = fraction * 1 / float64(mustGuess)
 		}
 		repeats[letter] = true
 		freq, ok := frequencyV2[i][letter]
 		if !ok {
 			return 0
 		}
-		sum += fraction * freq * math.Log(freq)
+		sum[i] += fraction * freq * -1 * math.Log(freq)
 	}
-	return -1 * sum
+	rval := float64(0)
+	for i := range sum {
+		rval += sum[i]
+	}
+	if eligibleWord {
+		// We gain a lot of information if we guess the word correctly!
+		rval += 1 / float64(mustGuess) * -1 * math.Log(1/float64(mustGuess))
+	}
+	if debug {
+		fmt.Printf("%s", string(word))
+		for i := range sum {
+			pval := sum[i]
+			if pval != 0 {
+				pval = pval
+			}
+			fmt.Printf(" %0.2f", pval)
+			rval += sum[i]
+		}
+		fmt.Printf("\n")
+	}
+	return rval
 }
 
 func eligible(word []byte) bool {
@@ -206,6 +265,7 @@ func main() {
 	wordsSplit := bytes.Split(wordsAll, []byte{'\n'})
 	scores := make([]score, 0)
 	eligibleWords := make([]string, 0)
+	eligibleMap := make(map[string]bool, 0)
 	for _, word := range wordsSplit {
 		if len(word) != 5 {
 			continue
@@ -213,6 +273,7 @@ func main() {
 		sword := string(word)
 		if eligible(word) {
 			eligibleWords = append(eligibleWords, sword)
+			eligibleMap[sword] = true
 		}
 	}
 	if len(eligibleWords) == 1 {
@@ -267,14 +328,15 @@ func main() {
 		if ineligible[sword] {
 			continue
 		}
-		entropy := informationGained(word)
+		entropy := informationGained(word, eligibleMap[sword], len(eligibleMap), false)
 		scores = append(scores, score{word: sword, entropy: entropy})
 		sort.Slice(scores, func(i, j int) bool {
 			return scores[i].entropy > scores[j].entropy
 		})
 	}
 	for i := range scores {
-		fmt.Println(scores[i].word, scores[i].entropy)
+		fmt.Printf("%s %0.4f ", scores[i].word, scores[i].entropy)
+		informationGained([]byte(scores[i].word), eligibleMap[scores[i].word], len(eligibleMap), true)
 		if i > 50 {
 			break
 		}
@@ -290,4 +352,49 @@ func main() {
 	} else {
 		fmt.Printf("\n")
 	}
+	//for i := 0; i < 5; i++ {
+	//for j := 'a'; j <= 'z'; j++ {
+	//fmt.Printf("%s %0.4f\n", string(j), frequencyV2[i][byte(j)])
+	//}
+	//fmt.Println("")
+	//}
+}
+
+// Words in /usr/share/dict/words that aren't accepted by Wordle, not an
+// exhaustive list.
+var ineligible = map[string]bool{
+	"soary": true,
+	"barie": true,
+	"solay": true,
+	"seary": true,
+	"sairy": true,
+	"saily": true,
+	"sorty": true,
+	"tarie": true,
+	"maney": true,
+	"solea": true,
+	"sotie": true,
+	"sauty": true,
+	"galey": true,
+	"laney": true,
+	"criey": true,
+	"solen": true,
+	"saimy": true,
+	"barse": true,
+	"carty": true,
+	"doney": true,
+	"tarse": true,
+	"souly": true,
+	"soury": true,
+	"strey": true,
+	"suine": true,
+	"kakar": true,
+	"bahur": true,
+	"kapur": true,
+	"gagor": true,
+	"raash": true,
+	"rakan": true,
+	"bahar": true,
+	"mahar": true,
+	"kahar": true,
 }
