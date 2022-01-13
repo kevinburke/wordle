@@ -193,7 +193,7 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 		if !ok {
 			return 0
 		}
-		sum[i] += fraction * freq * -1 * math.Log(freq)
+		sum[i] += fraction*freq*-1*math.Log(freq) + otherPositionInfo/4
 	}
 	rval := float64(0)
 	for i := range sum {
@@ -220,9 +220,6 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 }
 
 func eligible(word []byte) bool {
-	if ineligible[string(word)] {
-		return false
-	}
 	wordCopy := make(map[byte]bool, len(lettersInWord))
 	for i := range lettersInWord {
 		wordCopy[i] = true
@@ -314,9 +311,6 @@ func main() {
 		}
 	}
 	for _, word := range words {
-		if ineligible[word] {
-			continue
-		}
 		bword := []byte(word)
 		entropy := informationGained(bword, eligibleMap[word], len(eligibleMap), false)
 		scores = append(scores, score{word: word, entropy: entropy})
@@ -348,43 +342,4 @@ func main() {
 	//}
 	//fmt.Println("")
 	//}
-}
-
-// Words in /usr/share/dict/words that aren't accepted by Wordle, not an
-// exhaustive list.
-var ineligible = map[string]bool{
-	"soary": true,
-	"barie": true,
-	"solay": true,
-	"seary": true,
-	"sairy": true,
-	"saily": true,
-	"sorty": true,
-	"tarie": true,
-	"maney": true,
-	"solea": true,
-	"sotie": true,
-	"sauty": true,
-	"galey": true,
-	"laney": true,
-	"criey": true,
-	"solen": true,
-	"saimy": true,
-	"barse": true,
-	"carty": true,
-	"doney": true,
-	"tarse": true,
-	"souly": true,
-	"soury": true,
-	"strey": true,
-	"suine": true,
-	"kakar": true,
-	"bahur": true,
-	"kapur": true,
-	"gagor": true,
-	"raash": true,
-	"rakan": true,
-	"bahar": true,
-	"mahar": true,
-	"kahar": true,
 }
