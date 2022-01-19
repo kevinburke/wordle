@@ -10,9 +10,8 @@ var gone = map[byte]bool{
 	// 'c': true,
 }
 
-var guessed = [5]byte{0, 0, 0, 0, 0}
-
 // var guessed = [5]byte{0, 0, 0, 0, 0}
+var guessed = [5]byte{0, 0, 0, 0, 0}
 
 var mustGuess int
 
@@ -128,6 +127,15 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 	sum := [5]float64{}
 	repeats := make(map[byte]bool)
 	for i, letter := range word {
+		repeatsFraction := float64(0)
+		letterRepeats := false
+		if repeats[letter] {
+			letterRepeats = true
+			repeatsFraction = 1 / float64(mustGuess)
+		}
+		// this check needs to go first since we break out of the for loop early
+		// in some cases
+		repeats[letter] = true
 		if gone[letter] {
 			continue
 		}
@@ -138,7 +146,7 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 		// However, we _can_ gain information about the other positions
 		otherPositionSum := float64(0)
 		for j := 0; j < 5; j++ {
-			if j != i && guessed[j] == 0 {
+			if j != i && guessed[j] == 0 && frequencyV2[j][letter] < 1 {
 				otherPositionSum += frequencyV2[j][letter] * 1 / float64(mustGuess)
 			}
 		}
@@ -146,8 +154,9 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 		otherPositionInfo := float64(0)
 		if otherPositionSum > 0 {
 			otherPositionInfo = otherPositionSum * -1 * math.Log(otherPositionSum)
+			// fmt.Println(string(word), "other position", otherPositionSum, otherPositionInfo)
 			if eligibleWord {
-				//fmt.Println(string(word), "other position", otherPositionSum, otherPositionInfo)
+				// fmt.Println(string(word), "other position", otherPositionSum, otherPositionInfo)
 			}
 		}
 		if guessed[i] != 0 && guessed[i] == letter {
@@ -183,15 +192,14 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 				fraction = fraction * 1 / float64(mustGuess)
 			}
 		}
-		if repeats[letter] {
+		if letterRepeats {
 			// We can still guess it exactly but we won't get more info about
 			// whether this letter is somewhere else in the word.
 			//
 			// However the utility of repeats declines as there are fewer words
 			// left to guess
-			fraction = fraction * 1 / float64(mustGuess)
+			fraction = fraction * repeatsFraction
 		}
-		repeats[letter] = true
 		freq, ok := frequencyV2[i][letter]
 		if !ok {
 			return 0
