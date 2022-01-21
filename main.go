@@ -7,11 +7,12 @@ import (
 )
 
 var gone = map[byte]bool{
-	// 'c': true,
+	// 'a': true,
 }
 
-// var guessed = [5]byte{0, 0, 0, 0, 0}
 var guessed = [5]byte{0, 0, 0, 0, 0}
+
+// var guessed = [5]byte{0, 0, 0, 0, 0}
 
 var mustGuess int
 
