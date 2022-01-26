@@ -7,7 +7,7 @@ import (
 )
 
 var gone = map[byte]bool{
-	// 'c': true,
+	// 'r': true,
 }
 
 // var guessed = [5]byte{0, 0, 0, 0, 0}
