@@ -330,7 +330,7 @@ func main() {
 		})
 	}
 	for i := range scores {
-		fmt.Printf("%s %0.4f ", scores[i].word, scores[i].entropy)
+		fmt.Printf("%03d %s %0.4f ", i+1, scores[i].word, scores[i].entropy)
 		informationGained([]byte(scores[i].word), eligibleMap[scores[i].word], len(eligibleMap), true)
 		if i > 50 {
 			break
