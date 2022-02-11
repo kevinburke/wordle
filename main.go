@@ -146,8 +146,8 @@ func informationGained(word []byte, eligibleWord bool, wordsLeft int, debug bool
 		// However, we _can_ gain information about the other positions
 		otherPositionSum := float64(0)
 		for j := 0; j < 5; j++ {
-			if j != i && guessed[j] == 0 && frequencyV2[j][letter] < 1 {
-				otherPositionSum += frequencyV2[j][letter] * 1 / float64(mustGuess)
+			if j != i && guessed[j] == 0 && !letterRepeats && !lettersInWord[letter] && frequencyV2[j][letter] < 1 {
+				otherPositionSum += frequencyV2[j][letter] * 1 / (8 - float64(mustGuess))
 			}
 		}
 		otherPositionSum = otherPositionSum / 4
